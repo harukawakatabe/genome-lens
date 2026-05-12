@@ -92,6 +92,10 @@ export async function mockAskAboutContext(
 /**
  * 真实 LLM 接口（预留）。当前调用 Anthropic Messages API 的最小实现。
  * 仅用于演示，可按需要替换为后端代理以避免暴露 Key。
+ *
+ * baseUrl: 可选自定义 Anthropic 兼容端点（如代理 / 国内中转），默认官方地址。
+ *          约定写到 host 即可（"https://api.anthropic.com"），自动补 "/v1/messages"。
+ *          若已包含 "/v1/messages" 则原样使用。
  */
 export async function askWithLLM(
   question: string,
@@ -99,11 +103,13 @@ export async function askWithLLM(
   report: GenomeReport,
   apiKey: string,
   model: string = "claude-opus-4-7",
+  baseUrl?: string,
 ): Promise<ChatMessage> {
-  const systemPrompt = buildSystemPrompt(report);
+  const systemPrompt = buildSystemPrompt(report, context);
   const userPrompt = buildUserPrompt(question, context, report);
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
+  const endpoint = buildEndpoint(baseUrl);
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -136,31 +142,96 @@ export async function askWithLLM(
   };
 }
 
-function buildSystemPrompt(report: GenomeReport): string {
+/**
+ * 运行时 system prompt（对齐 ref/03_内容生成提示词.md「提示词 G」）。
+ * 完整 GenomeReport 以 JSON 形式放进 <report>，当前追问聚焦在 <context>。
+ */
+export function buildSystemPrompt(report: GenomeReport, context: ChatContext = {}): string {
+  const gene = context.rsid ? report.genes.find((g) => g.rsid === context.rsid) : undefined;
+  const reportJson = JSON.stringify(report, null, 0);
   return [
-    "你是一名严谨的功能医学顾问，回答需要：",
-    "1. 必须基于用户提供的基因 / HLA / 补剂 / 体检数据进行个体化解读；",
-    "2. 给出量化区间与对应的基因依据；",
-    "3. 提示这不是医疗诊断、不可替代医生；",
-    "4. 中文输出，结构化、不啰嗦。",
+    "你是一名整合医学遗传咨询师，同时具备分子生物学、营养医学和免疫遗传学背景。",
     "",
-    `用户基础信息: ${JSON.stringify(report.basic)}`,
-    `用户系统评估: ${report.systems.map((s) => `${s.title}=${s.riskLevel}`).join(", ")}`,
+    "你正在帮助一位用户深入理解他/她自己的基因检测结果。用户的完整基因报告以 JSON 形式提供在下方 <report> 标签内。用户的当前追问聚焦在 <context> 标签所示的特定位点/系统/主题上。",
+    "",
+    "回答原则：",
+    "1. 紧扣 <context> 给出的上下文，不要泛泛而谈",
+    "2. 引用具体的 rsid 和用户分型，让用户能追溯",
+    "3. 量化具体：写百分比、倍数、剂量范围",
+    "4. 如涉及补剂剂量，必须给出形式（如\"甲基钴胺舌下\"而非\"B12\"）+ 剂量范围 + 与餐次/时间的关系",
+    "5. 必须说明监测方法：如何知道补对了",
+    "6. 若用户问的方向超出基因证据范围，明确告知\"该方向缺乏遗传指征\"，不要硬凑",
+    "7. 在回答末尾用一行总结\"下一步建议\"",
+    "8. 中文，不使用 emoji，不使用 Markdown 分隔线",
+    "9. 长度 200-500 字（除非用户要求详尽展开）",
+    "",
+    "医疗免责：所有内容仅为基于基因型的功能医学建议，不替代医生处方。涉及处方药、激素治疗、慢性病管理时务必告知用户咨询临床医生。",
+    "",
+    "<report>",
+    reportJson,
+    "</report>",
+    "",
+    "<context>",
+    `- 当前系统：${context.systemId ?? "（未指定）"}`,
+    `- 当前位点：${gene ? `${gene.geneSymbol} (${gene.rsid})` : context.geneSymbol ?? "（未指定）"}`,
+    `- 用户分型：${gene?.genotype ?? "（未指定）"}`,
+    `- 主题：${context.topic ?? "（自由追问）"}`,
+    "</context>",
   ].join("\n");
 }
 
-function buildUserPrompt(question: string, context: ChatContext, report: GenomeReport): string {
-  const gene = context.rsid ? report.genes.find((g) => g.rsid === context.rsid) : undefined;
-  const sys = context.systemId ? report.systems.find((s) => s.systemId === context.systemId) : undefined;
-  return [
-    `当前上下文: ${JSON.stringify(context)}`,
-    gene ? `位点详情: ${JSON.stringify(gene)}` : "",
-    sys ? `系统评估: ${sys.title} / ${sys.riskLevel} / ${sys.oneLineSummary}` : "",
-    "",
-    `问题: ${question}`,
-  ]
-    .filter(Boolean)
-    .join("\n");
+/** User prompt：运行时只拼接用户真实问题（按 03 文档 G）。 */
+export function buildUserPrompt(question: string, _context: ChatContext, _report: GenomeReport): string {
+  return question;
+}
+
+/**
+ * 通过 /api/chat 服务端代理调用 LLM，API Key 保留在服务器不暴露给浏览器。
+ */
+export async function askViaProxy(
+  question: string,
+  context: ChatContext,
+  report: GenomeReport,
+  model: string = "claude-opus-4-7",
+  baseUrl?: string,
+): Promise<ChatMessage> {
+  const systemPrompt = buildSystemPrompt(report, context);
+  const userPrompt = buildUserPrompt(question, context, report);
+
+  const res = await fetch("/api/chat", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      model,
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+      baseUrl,
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err?.error ?? `代理请求失败: ${res.status}`);
+  }
+  const data = await res.json();
+  const text = data?.content?.[0]?.text ?? "（接口返回为空）";
+  return {
+    id: uid("msg"),
+    role: "assistant",
+    content: text,
+    timestamp: new Date().toISOString(),
+    context,
+  };
+}
+
+function buildEndpoint(baseUrl?: string): string {
+  const fallback = "https://api.anthropic.com";
+  const raw = (baseUrl ?? fallback).trim().replace(/\/+$/, "");
+  if (!raw) return `${fallback}/v1/messages`;
+  if (/\/v1\/messages$/.test(raw)) return raw;
+  if (/\/v1$/.test(raw)) return `${raw}/messages`;
+  return `${raw}/v1/messages`;
 }
 
 function riskLabel(r: string): string {
