@@ -10,6 +10,7 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { useShallow } from "zustand/react/shallow";
 import { useApp } from "@/store";
 import { uid } from "@/lib/utils";
+import { getConflictRules } from "@/lib/generated-loader";
 
 export default function SupplementsPage() {
   const { supplements, report, addSupplement, removeSupplement } = useApp(
@@ -31,19 +32,12 @@ export default function SupplementsPage() {
   );
   const gaps = sRecs.filter((r) => !covered.includes(r));
 
-  // 冲突检测占位：APOE ε4 + 大剂量 α-生育酚
-  const conflicts: { title: string; reason: string }[] = [];
-  if (report?.basic.apoe?.includes("ε4")) {
-    const hasAlpha = supplements.some((s) =>
-      s.ingredients.some((i) => /α-生育酚|alpha.*tocopherol|维生素\s*E/i.test(i.name) && i.amount >= 400),
-    );
-    if (hasAlpha) {
-      conflicts.push({
-        title: "α-生育酚单体剂量过高（APOE ε4）",
-        reason: "ε4 携带者下大剂量 α-生育酚可能不利，建议改用混合生育酚 / 生育三烯酚。",
-      });
-    }
-  }
+  /**
+   * 冲突检测：直接展示生成的全部规则（来自 LLM I 模块），
+   * 用户的当前补剂清单作为参考显示在「触发条件」里。
+   * 真实生产应做关键词匹配；MVP 先全量展示规则。
+   */
+  const conflicts = getConflictRules();
 
   return (
     <AppShell crumbs={[{ label: "仪表盘", href: "/dashboard" }, { label: "补剂" }]}>
@@ -68,9 +62,36 @@ export default function SupplementsPage() {
           </CardHeader>
           <CardContent className="space-y-2">
             {conflicts.map((c, i) => (
-              <div key={i} className="rounded-md border border-red-200 bg-white p-3">
-                <div className="text-sm font-medium text-red-700">{c.title}</div>
-                <div className="mt-1 text-xs text-slate-600">{c.reason}</div>
+              <div
+                key={i}
+                className={
+                  "rounded-md border p-3 bg-white " +
+                  (c.severity === "high"
+                    ? "border-red-200"
+                    : c.severity === "medium"
+                      ? "border-orange-200"
+                      : "border-slate-200")
+                }
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium text-slate-800">{c.title}</div>
+                  <Badge variant={c.severity === "high" ? "high" : c.severity === "medium" ? "medium" : "outline"}>
+                    {c.severity === "high" ? "高风险" : c.severity === "medium" ? "中风险" : "低风险"}
+                  </Badge>
+                </div>
+                {c.trigger && (
+                  <div className="mt-1.5 text-[11px] text-slate-500">
+                    <span className="font-medium">触发：</span>
+                    {c.trigger}
+                  </div>
+                )}
+                <div className="mt-1 text-xs text-slate-700">{c.reason}</div>
+                {c.suggestion && (
+                  <div className="mt-1 text-xs text-primary">
+                    <span className="font-medium">建议：</span>
+                    {c.suggestion}
+                  </div>
+                )}
               </div>
             ))}
           </CardContent>
