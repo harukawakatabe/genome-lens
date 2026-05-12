@@ -1,4 +1,10 @@
 import type { GenotypedGene, HlaRecord, SupplementItem, LabResult, BasicInfo } from "@/types";
+import { getAnnotation } from "@/lib/generated-loader";
+
+/** 优先用 LLM 生成的真实 annotation，缺失时用静态短句。 */
+function ann(rsid: string, fallback: string): string {
+  return getAnnotation(rsid)?.annotation ?? fallback;
+}
 
 /**
  * 占位用户：女性 / APOE ε3/ε4 / MTHFR C677T 杂合 + A1298C 纯合 / COMT GG /
@@ -13,26 +19,26 @@ export const MOCK_BASIC: BasicInfo = {
 };
 
 export const MOCK_GENES: GenotypedGene[] = [
-  { rsid: "rs429358", geneSymbol: "APOE", variantName: "APOE C112R", genotype: "CT", effectType: "hetero", system: "neuro", annotation: "APOE ε4 标记，杂合携带。" },
-  { rsid: "rs7412", geneSymbol: "APOE", variantName: "APOE R158C", genotype: "CC", effectType: "wild", system: "neuro", annotation: "非 ε2 携带。" },
-  { rsid: "rs6265", geneSymbol: "BDNF", variantName: "Val66Met", genotype: "CT", effectType: "hetero", system: "neuro", annotation: "Val/Met 杂合，突触可塑性轻度受影响。" },
-  { rsid: "rs1800795", geneSymbol: "IL6", variantName: "IL-6 -174G/C", genotype: "GG", effectType: "homo", system: "inflammation", annotation: "高产型，慢性炎症倾向。" },
-  { rsid: "rs1800629", geneSymbol: "TNF", variantName: "TNF -308G/A", genotype: "GG", effectType: "wild", system: "inflammation", annotation: "TNF-α 正常表达。" },
-  { rsid: "rs1801133", geneSymbol: "MTHFR", variantName: "C677T", genotype: "CT", effectType: "hetero", system: "methylation", annotation: "C677T 杂合，酶活性约下降 30%。" },
-  { rsid: "rs1801131", geneSymbol: "MTHFR", variantName: "A1298C", genotype: "GG", effectType: "homo", system: "methylation", annotation: "A1298C 纯合，与 C677T 复合杂合显著影响一碳代谢。" },
-  { rsid: "rs1801394", geneSymbol: "MTRR", variantName: "A66G", genotype: "AG", effectType: "hetero", system: "methylation", annotation: "MTRR 杂合，B12 再活化轻度受影响。" },
-  { rsid: "rs1805087", geneSymbol: "MTR", variantName: "A2756G", genotype: "AA", effectType: "wild", system: "methylation", annotation: "野生型。" },
-  { rsid: "rs2228570", geneSymbol: "VDR", variantName: "FokI", genotype: "CT", effectType: "hetero", system: "vitamin", annotation: "FokI 杂合，VDR 活性中等。" },
-  { rsid: "rs7501331", geneSymbol: "BCO1", variantName: "BCO1 R267S", genotype: "TT", effectType: "homo", system: "vitamin", annotation: "β-胡萝卜素转化能力显著下降。" },
-  { rsid: "rs12934922", geneSymbol: "BCO1", variantName: "BCO1 A379V", genotype: "TT", effectType: "homo", system: "vitamin", annotation: "BCO1 双纯合，建议直接补充视黄醇。" },
-  { rsid: "rs1801198", geneSymbol: "TCN2", variantName: "TCN2 P259R", genotype: "GG", effectType: "homo", system: "vitamin", annotation: "B12 运输蛋白活性受损，建议监测 holoTC/MMA。" },
-  { rsid: "rs4646903", geneSymbol: "CYP1A1", variantName: "MspI", genotype: "TT", effectType: "wild", system: "estrogen", annotation: "野生型。" },
-  { rsid: "rs1056836", geneSymbol: "CYP1B1", variantName: "L432V", genotype: "CG", effectType: "hetero", system: "estrogen", annotation: "杂合，4-OH 通路活性中等偏高。" },
-  { rsid: "rs1695", geneSymbol: "GSTP1", variantName: "I105V", genotype: "AG", effectType: "hetero", system: "detox", annotation: "杂合，二相解毒能力中等。" },
-  { rsid: "rs4680", geneSymbol: "COMT", variantName: "Val158Met", genotype: "GG", effectType: "wild", system: "neurotransmitter", annotation: "Val/Val 高速型，多巴胺周转快。" },
-  { rsid: "rs6323", geneSymbol: "MAOA", variantName: "MAOA R297R", genotype: "GG", effectType: "wild", system: "neurotransmitter", annotation: "MAOA 高活性，单胺类降解快。" },
-  { rsid: "rs8192678", geneSymbol: "PPARGC1A", variantName: "Gly482Ser", genotype: "AA", effectType: "homo", system: "cardio", annotation: "Ser/Ser，线粒体生物合成下降。" },
-  { rsid: "rs7903146", geneSymbol: "TCF7L2", variantName: "TCF7L2 IVS", genotype: "CC", effectType: "wild", system: "cardio", annotation: "野生型。" },
+  { rsid: "rs429358", geneSymbol: "APOE", variantName: "APOE C112R", genotype: "CT", effectType: "hetero", system: "neuro", annotation: ann("rs429358", "APOE ε4 标记，杂合携带。") },
+  { rsid: "rs7412", geneSymbol: "APOE", variantName: "APOE R158C", genotype: "CC", effectType: "wild", system: "neuro", annotation: ann("rs7412", "非 ε2 携带。") },
+  { rsid: "rs6265", geneSymbol: "BDNF", variantName: "Val66Met", genotype: "CT", effectType: "hetero", system: "neuro", annotation: ann("rs6265", "Val/Met 杂合，突触可塑性轻度受影响。") },
+  { rsid: "rs1800795", geneSymbol: "IL6", variantName: "IL-6 -174G/C", genotype: "GG", effectType: "homo", system: "inflammation", annotation: ann("rs1800795", "高产型，慢性炎症倾向。") },
+  { rsid: "rs1800629", geneSymbol: "TNF", variantName: "TNF -308G/A", genotype: "GG", effectType: "wild", system: "inflammation", annotation: ann("rs1800629", "TNF-α 正常表达。") },
+  { rsid: "rs1801133", geneSymbol: "MTHFR", variantName: "C677T", genotype: "CT", effectType: "hetero", system: "methylation", annotation: ann("rs1801133", "C677T 杂合，酶活性约下降 30%。") },
+  { rsid: "rs1801131", geneSymbol: "MTHFR", variantName: "A1298C", genotype: "GG", effectType: "homo", system: "methylation", annotation: ann("rs1801131", "A1298C 纯合，与 C677T 复合杂合显著影响一碳代谢。") },
+  { rsid: "rs1801394", geneSymbol: "MTRR", variantName: "A66G", genotype: "AG", effectType: "hetero", system: "methylation", annotation: ann("rs1801394", "MTRR 杂合，B12 再活化轻度受影响。") },
+  { rsid: "rs1805087", geneSymbol: "MTR", variantName: "A2756G", genotype: "AA", effectType: "wild", system: "methylation", annotation: ann("rs1805087", "野生型。") },
+  { rsid: "rs2228570", geneSymbol: "VDR", variantName: "FokI", genotype: "CT", effectType: "hetero", system: "vitamin", annotation: ann("rs2228570", "FokI 杂合，VDR 活性中等。") },
+  { rsid: "rs7501331", geneSymbol: "BCO1", variantName: "BCO1 R267S", genotype: "TT", effectType: "homo", system: "vitamin", annotation: ann("rs7501331", "β-胡萝卜素转化能力显著下降。") },
+  { rsid: "rs12934922", geneSymbol: "BCO1", variantName: "BCO1 A379V", genotype: "TT", effectType: "homo", system: "vitamin", annotation: ann("rs12934922", "BCO1 双纯合，建议直接补充视黄醇。") },
+  { rsid: "rs1801198", geneSymbol: "TCN2", variantName: "TCN2 P259R", genotype: "GG", effectType: "homo", system: "vitamin", annotation: ann("rs1801198", "B12 运输蛋白活性受损，建议监测 holoTC/MMA。") },
+  { rsid: "rs4646903", geneSymbol: "CYP1A1", variantName: "MspI", genotype: "TT", effectType: "wild", system: "estrogen", annotation: ann("rs4646903", "野生型。") },
+  { rsid: "rs1056836", geneSymbol: "CYP1B1", variantName: "L432V", genotype: "CG", effectType: "hetero", system: "estrogen", annotation: ann("rs1056836", "杂合，4-OH 通路活性中等偏高。") },
+  { rsid: "rs1695", geneSymbol: "GSTP1", variantName: "I105V", genotype: "AG", effectType: "hetero", system: "detox", annotation: ann("rs1695", "杂合，二相解毒能力中等。") },
+  { rsid: "rs4680", geneSymbol: "COMT", variantName: "Val158Met", genotype: "GG", effectType: "wild", system: "neurotransmitter", annotation: ann("rs4680", "Val/Val 高速型，多巴胺周转快。") },
+  { rsid: "rs6323", geneSymbol: "MAOA", variantName: "MAOA R297R", genotype: "GG", effectType: "wild", system: "neurotransmitter", annotation: ann("rs6323", "MAOA 高活性，单胺类降解快。") },
+  { rsid: "rs8192678", geneSymbol: "PPARGC1A", variantName: "Gly482Ser", genotype: "AA", effectType: "homo", system: "cardio", annotation: ann("rs8192678", "Ser/Ser，线粒体生物合成下降。") },
+  { rsid: "rs7903146", geneSymbol: "TCF7L2", variantName: "TCF7L2 IVS", genotype: "CC", effectType: "wild", system: "cardio", annotation: ann("rs7903146", "野生型。") },
 ];
 
 export const MOCK_HLA: HlaRecord[] = [
