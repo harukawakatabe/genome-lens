@@ -24,7 +24,7 @@ import { buildReport } from "@/lib/report-builder";
 import { KEY_RSIDS } from "@/lib/annotation/key-rsids";
 import { MOCK_GENES, MOCK_HLA, MOCK_SUPPLEMENTS, MOCK_LABS } from "@/content/mock/user-genes";
 import { cn, uid } from "@/lib/utils";
-import type { BasicInfo, GenotypedGene, HlaRecord, LabResult, SupplementItem } from "@/types";
+import { SYSTEMS, type BasicInfo, type GenotypedGene, type HlaRecord, type LabResult, type SupplementItem } from "@/types";
 
 const STEPS = ["基础信息", "基因数据", "HLA 分型", "补剂 & 体检"];
 
@@ -444,7 +444,7 @@ function GeneStep({
                     <td className="px-2 py-1 font-mono">{g.rsid}</td>
                     <td className="px-2 py-1">{g.geneSymbol}</td>
                     <td className="px-2 py-1">{g.genotype}</td>
-                    <td className="px-2 py-1 text-slate-500">{g.system}</td>
+                    <td className="px-2 py-1 text-slate-500">{SYSTEMS.find((x) => x.id === g.system)?.title ?? g.system}</td>
                   </tr>
                 ))}
               </tbody>

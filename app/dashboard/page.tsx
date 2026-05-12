@@ -2,6 +2,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { AlertOctagon, Download, FileText, RefreshCw, Share2 } from "lucide-react";
+import { useShallow } from "zustand/react/shallow";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,18 +23,20 @@ import type { RiskLevel } from "@/types";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { report, initialized, basic, supplements, labs, hla, genes, setReport, pushSnapshot, loadMock } = useApp((s) => ({
-    report: s.report,
-    initialized: s.initialized,
-    basic: s.basic,
-    supplements: s.supplements,
-    labs: s.labs,
-    hla: s.hla,
-    genes: s.genes,
-    setReport: s.setReport,
-    pushSnapshot: s.pushSnapshot,
-    loadMock: s.loadMock,
-  }));
+  const { report, initialized, basic, supplements, labs, hla, genes, setReport, pushSnapshot, loadMock } = useApp(
+    useShallow((s) => ({
+      report: s.report,
+      initialized: s.initialized,
+      basic: s.basic,
+      supplements: s.supplements,
+      labs: s.labs,
+      hla: s.hla,
+      genes: s.genes,
+      setReport: s.setReport,
+      pushSnapshot: s.pushSnapshot,
+      loadMock: s.loadMock,
+    })),
+  );
   const [regenOpen, setRegenOpen] = React.useState(false);
 
   React.useEffect(() => {

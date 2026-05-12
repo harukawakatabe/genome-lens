@@ -5,19 +5,22 @@ import { ArrowRight, MessageSquare } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useShallow } from "zustand/react/shallow";
 import { useApp } from "@/store";
 import { SYSTEMS } from "@/types";
 
 const EFFECT_LABEL: Record<string, string> = { wild: "野生型", hetero: "杂合", homo: "纯合", unknown: "未知" };
 
 export function LocusDrawer() {
-  const { locusOpen, closeLocus, locusRsid, report, openAi } = useApp((s) => ({
-    locusOpen: s.locusOpen,
-    closeLocus: s.closeLocus,
-    locusRsid: s.locusRsid,
-    report: s.report,
-    openAi: s.openAi,
-  }));
+  const { locusOpen, closeLocus, locusRsid, report, openAi } = useApp(
+    useShallow((s) => ({
+      locusOpen: s.locusOpen,
+      closeLocus: s.closeLocus,
+      locusRsid: s.locusRsid,
+      report: s.report,
+      openAi: s.openAi,
+    })),
+  );
 
   const gene = locusRsid && report ? report.genes.find((g) => g.rsid === locusRsid) : undefined;
   const sys = gene ? SYSTEMS.find((s) => s.id === gene.system) : undefined;

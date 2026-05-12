@@ -7,16 +7,19 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { useShallow } from "zustand/react/shallow";
 import { useApp } from "@/store";
 import { uid } from "@/lib/utils";
 
 export default function SupplementsPage() {
-  const { supplements, report, addSupplement, removeSupplement } = useApp((s) => ({
-    supplements: s.supplements,
-    report: s.report,
-    addSupplement: s.addSupplement,
-    removeSupplement: s.removeSupplement,
-  }));
+  const { supplements, report, addSupplement, removeSupplement } = useApp(
+    useShallow((s) => ({
+      supplements: s.supplements,
+      report: s.report,
+      addSupplement: s.addSupplement,
+      removeSupplement: s.removeSupplement,
+    })),
+  );
 
   const sRecs = report?.recommendations.filter((r) => r.tier === "S" && r.type === "supplement") ?? [];
   const covered = sRecs.filter((r) =>

@@ -11,6 +11,7 @@ import { RiskBadge, riskColor } from "@/components/risk-badge";
 import { Disclaimer } from "@/components/disclaimer";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { useShallow } from "zustand/react/shallow";
 import { useApp } from "@/store";
 import { SYSTEMS, type SystemId } from "@/types";
 
@@ -29,11 +30,13 @@ const EFFECT_LABEL: Record<string, string> = { wild: "野生", hetero: "杂合",
 export default function SystemDetailPage() {
   const params = useParams<{ id: SystemId }>();
   const router = useRouter();
-  const { report, openLocus, openAi } = useApp((s) => ({
-    report: s.report,
-    openLocus: s.openLocus,
-    openAi: s.openAi,
-  }));
+  const { report, openLocus, openAi } = useApp(
+    useShallow((s) => ({
+      report: s.report,
+      openLocus: s.openLocus,
+      openAi: s.openAi,
+    })),
+  );
   const [active, setActive] = React.useState("overview");
 
   React.useEffect(() => {

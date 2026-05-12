@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useShallow } from "zustand/react/shallow";
 import { useApp } from "@/store";
 import { uid } from "@/lib/utils";
 import { toast } from "@/components/ui/toast";
@@ -16,12 +17,14 @@ import { toast } from "@/components/ui/toast";
 const FILTERS = ["全部", "异常", "正常", "未录入"] as const;
 
 export default function MonitoringPage() {
-  const { report, labs, addLab, removeLab } = useApp((s) => ({
-    report: s.report,
-    labs: s.labs,
-    addLab: s.addLab,
-    removeLab: s.removeLab,
-  }));
+  const { report, labs, addLab, removeLab } = useApp(
+    useShallow((s) => ({
+      report: s.report,
+      labs: s.labs,
+      addLab: s.addLab,
+      removeLab: s.removeLab,
+    })),
+  );
   const [filter, setFilter] = React.useState<(typeof FILTERS)[number]>("全部");
   const [openRow, setOpenRow] = React.useState<string | null>(null);
 
