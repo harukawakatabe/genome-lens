@@ -43,6 +43,8 @@ interface AppState {
   /** 设置 */
   apiKey?: string;
   model: string;
+  baseUrl?: string;
+  useSystemToken: boolean;
 
   // actions
   setBasic: (b: BasicInfo) => void;
@@ -69,6 +71,8 @@ interface AppState {
 
   setApiKey: (k?: string) => void;
   setModel: (m: string) => void;
+  setBaseUrl: (u?: string) => void;
+  setUseSystemToken: (v: boolean) => void;
 }
 
 export const useApp = create<AppState>()(
@@ -88,7 +92,9 @@ export const useApp = create<AppState>()(
       locusOpen: false,
       locusRsid: undefined,
       apiKey: undefined,
-      model: "claude-opus-4-7",
+      model: process.env.NEXT_PUBLIC_ANTHROPIC_MODEL ?? "claude-opus-4-7",
+      baseUrl: undefined,
+      useSystemToken: false,
 
       setBasic: (b) => set({ basic: b }),
       setGenes: (g) => set({ genes: g }),
@@ -158,6 +164,8 @@ export const useApp = create<AppState>()(
 
       setApiKey: (k) => set({ apiKey: k }),
       setModel: (m) => set({ model: m }),
+      setBaseUrl: (u) => set({ baseUrl: u }),
+      setUseSystemToken: (v) => set({ useSystemToken: v }),
     }),
     {
       name: "genome-lens-store",
@@ -173,6 +181,8 @@ export const useApp = create<AppState>()(
         history: s.history,
         apiKey: s.apiKey,
         model: s.model,
+        baseUrl: s.baseUrl,
+        useSystemToken: s.useSystemToken,
       }),
     },
   ),
