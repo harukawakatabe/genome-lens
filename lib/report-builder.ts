@@ -11,6 +11,14 @@ import type {
   SystemId,
 } from "@/types";
 import { uid } from "@/lib/utils";
+import {
+  getOneLineSummary,
+  getNarrative,
+  getCrossLinks,
+  getSupplementMatrix,
+  getMonitoringMatrix,
+  getUncoveredRsids,
+} from "@/lib/generated-loader";
 
 /**
  * 静态规则占位：依据用户分型生成系统评估、推荐与监测。
@@ -53,6 +61,7 @@ export function buildReport(input: BuildInput): GenomeReport {
   const recommendations = buildRecommendations(genes);
   const avoidList = buildAvoidList(genes);
   const monitoring = buildMonitoring(genes, labs);
+  const uncovered = getUncoveredRsids();
 
   return {
     generatedAt: new Date().toISOString(),
@@ -66,11 +75,39 @@ export function buildReport(input: BuildInput): GenomeReport {
     avoidList,
     monitoring,
     appendix: {
-      uncoveredImportantRsids: [
-        { rsid: "rs1801272", reason: "NAT2 慢乙酰化分型，影响某些药物代谢，本次芯片未覆盖。" },
-        { rsid: "rs1799853", reason: "CYP2C9*2，与华法林剂量相关。" },
-      ],
+      uncoveredImportantRsids: uncovered.length
+        ? uncovered.map((u) => ({
+            rsid: u.rsid,
+            reason: `[${u.priority}] ${u.geneSymbol}：${u.reason}${u.suggestedAction ? `（${u.suggestedAction}）` : ""}`,
+          }))
+        : [
+            { rsid: "rs1801272", reason: "NAT2 慢乙酰化分型，影响某些药物代谢，本次芯片未覆盖。" },
+            { rsid: "rs1799853", reason: "CYP2C9*2，与华法林剂量相关。" },
+          ],
     },
+  };
+}
+
+/**
+ * 统一构造：以 LLM 生成的 F/A/E 为文本来源；
+ * 风险等级与驱动位点仍由本地静态规则计算（保证与用户实际分型一致）。
+ */
+function assemble(
+  systemId: SystemId,
+  title: string,
+  riskLevel: SystemAssessment["riskLevel"],
+  drivingVariants: { rsid: string; reason: string }[],
+  fallbackSummary: string,
+  fallbackNarrative: string,
+): SystemAssessment {
+  return {
+    systemId,
+    title,
+    riskLevel,
+    oneLineSummary: getOneLineSummary(systemId) || fallbackSummary,
+    drivingVariants,
+    crossSystemLinks: getCrossLinks(systemId),
+    narrative: getNarrative(systemId) || fallbackNarrative,
   };
 }
 
@@ -81,21 +118,16 @@ function buildNeuro(genes: GenotypedGene[], basic: BasicInfo): SystemAssessment 
   const driving: { rsid: string; reason: string }[] = [];
   if (isE4) driving.push({ rsid: "rs429358", reason: `APOE 分型 ${apoe}，ε4 携带提示晚发型 AD 与神经炎症风险升高。` });
   if (bdnf && bdnf.effectType !== "wild") driving.push({ rsid: "rs6265", reason: "BDNF Val/Met 杂合，突触可塑性下降。" });
-  return {
-    systemId: "neuro",
-    title: "神经与脑",
-    riskLevel: isE4 ? "high" : "medium",
-    oneLineSummary: isE4
+  return assemble(
+    "neuro",
+    "神经与脑",
+    isE4 ? "high" : "medium",
+    driving,
+    isE4
       ? "APOE ε4 携带 + BDNF Val/Met，神经退行与可塑性双通路风险偏高。"
       : "神经系统总体倾向中等，建议长期保持有氧运动与 Ω-3 摄入。",
-    drivingVariants: driving,
-    crossSystemLinks: [
-      { systemId: "inflammation", mechanism: "ε4 + IL-6 高产共同放大神经炎症。", relation: "synergy" },
-      { systemId: "cardio", mechanism: "APOE ε4 + 胰岛素抵抗显著增加痴呆风险。", relation: "synergy" },
-    ],
-    narrative:
-      "APOE ε4 等位降低 Aβ 清除效率，与年龄相关认知下降相关；建议关注血糖、血压、睡眠与有氧运动等可干预因子。",
-  };
+    "APOE ε4 等位降低 Aβ 清除效率，与年龄相关认知下降相关。",
+  );
 }
 
 function buildInflammation(genes: GenotypedGene[], hla: HlaRecord[]): SystemAssessment {
@@ -106,43 +138,32 @@ function buildInflammation(genes: GenotypedGene[], hla: HlaRecord[]): SystemAsse
     | "high"
     | "medium"
     | "low";
-  return {
-    systemId: "inflammation",
-    title: "炎症与免疫",
-    riskLevel: risk,
-    oneLineSummary: "IL-6 GG 高产型 + HLA-B*27:05 / DRB1*15:01 背景，建议主动管理慢性炎症与自身免疫风险。",
-    drivingVariants: [
-      ...(il6 ? [{ rsid: "rs1800795", reason: "IL-6 -174 GG 与高 IL-6 产出相关。" }] : []),
-    ],
-    crossSystemLinks: [
-      { systemId: "neuro", mechanism: "高 IL-6 加速 APOE ε4 介导的神经炎症。", relation: "synergy" },
-      { systemId: "estrogen", mechanism: "炎症通路与 4-OH 雌激素互相放大。", relation: "synergy" },
-    ],
-    narrative:
-      "HLA-B*27:05 与脊柱关节病相关，DRB1*15:01 与多发性硬化相关，结合 IL-6 高产倾向，建议监测 hsCRP / IL-6 / 抗核抗体。",
-  };
+  return assemble(
+    "inflammation",
+    "炎症与免疫",
+    risk,
+    il6 ? [{ rsid: "rs1800795", reason: "IL-6 -174 GG 与高 IL-6 产出相关。" }] : [],
+    "IL-6 GG 高产型 + HLA-B*27:05 / DRB1*15:01 背景。",
+    "HLA-B*27:05 与脊柱关节病相关，DRB1*15:01 与多发性硬化相关。",
+  );
 }
 
 function buildMethylation(genes: GenotypedGene[]): SystemAssessment {
   const c677t = geneByRs(genes, "rs1801133");
   const a1298c = geneByRs(genes, "rs1801131");
   const score = effectScore(c677t) + effectScore(a1298c);
-  return {
-    systemId: "methylation",
-    title: "甲基化系统",
-    riskLevel: score >= 3 ? "high" : score >= 2 ? "medium" : "low",
-    oneLineSummary: "MTHFR C677T 杂合 + A1298C 纯合（复合杂合），5-MTHF 生成显著受限。",
-    drivingVariants: [
-      ...(c677t ? [{ rsid: "rs1801133", reason: "C677T 杂合，酶活性下降约 30%。" }] : []),
-      ...(a1298c ? [{ rsid: "rs1801131", reason: "A1298C 纯合，进一步压低活性。" }] : []),
-    ],
-    crossSystemLinks: [
-      { systemId: "neuro", mechanism: "甲基化不足影响神经递质合成与髓鞘维护。", relation: "synergy" },
-      { systemId: "estrogen", mechanism: "甲基化能力影响 COMT 介导的 2-OH/4-OH 灭活。", relation: "synergy" },
-    ],
-    narrative:
-      "建议优先使用活性形式（5-MTHF / 甲钴胺 / P-5-P），并定期监测同型半胱氨酸（目标 < 8 μmol/L）。",
-  };
+  const driving = [
+    ...(c677t ? [{ rsid: "rs1801133", reason: "C677T 杂合，酶活性下降约 30%。" }] : []),
+    ...(a1298c ? [{ rsid: "rs1801131", reason: "A1298C 纯合，进一步压低活性。" }] : []),
+  ];
+  return assemble(
+    "methylation",
+    "甲基化系统",
+    score >= 3 ? "high" : score >= 2 ? "medium" : "low",
+    driving,
+    "MTHFR C677T 杂合 + A1298C 纯合（复合杂合），5-MTHF 生成显著受限。",
+    "建议优先使用活性形式（5-MTHF / 甲钴胺 / P-5-P）。",
+  );
 }
 
 function buildVitamin(genes: GenotypedGene[]): SystemAssessment {
@@ -150,91 +171,86 @@ function buildVitamin(genes: GenotypedGene[]): SystemAssessment {
   const bco1b = geneByRs(genes, "rs12934922");
   const tcn2 = geneByRs(genes, "rs1801198");
   const vdr = geneByRs(genes, "rs2228570");
-  return {
-    systemId: "vitamin",
-    title: "维生素代谢",
-    riskLevel: "high",
-    oneLineSummary: "BCO1 双纯合 + TCN2 GG + VDR FokI 杂合，β-胡萝卜素、B12、维 D 三条通路同时受限。",
-    drivingVariants: [
+  return assemble(
+    "vitamin",
+    "维生素代谢",
+    "high",
+    [
       ...(bco1a ? [{ rsid: "rs7501331", reason: "BCO1 R267S 纯合。" }] : []),
       ...(bco1b ? [{ rsid: "rs12934922", reason: "BCO1 A379V 纯合。" }] : []),
       ...(tcn2 ? [{ rsid: "rs1801198", reason: "TCN2 P259R 纯合。" }] : []),
       ...(vdr ? [{ rsid: "rs2228570", reason: "VDR FokI 杂合。" }] : []),
     ],
-    crossSystemLinks: [
-      { systemId: "methylation", mechanism: "B12 运输受限直接影响 MTR 反应。", relation: "synergy" },
-      { systemId: "inflammation", mechanism: "维 D 不足放大慢性炎症。", relation: "synergy" },
-    ],
-    narrative:
-      "建议直接补充视黄醇形式的维 A，使用甲钴胺 + 腺苷钴胺，监测 25-OH-D 目标 50-60 ng/mL，holoTC > 50 pmol/L。",
-  };
+    "BCO1 双纯合 + TCN2 GG + VDR FokI 杂合。",
+    "建议直接补充视黄醇形式的维 A，使用甲钴胺 + 腺苷钴胺。",
+  );
 }
 
 function buildEstrogen(genes: GenotypedGene[]): SystemAssessment {
   const cyp1b1 = geneByRs(genes, "rs1056836");
-  return {
-    systemId: "estrogen",
-    title: "雌激素代谢",
-    riskLevel: cyp1b1 && cyp1b1.effectType !== "wild" ? "medium" : "low",
-    oneLineSummary: "CYP1B1 杂合，4-OH 通路活性偏高，建议加强 2-OH 通路与谷胱甘肽支持。",
-    drivingVariants: cyp1b1 ? [{ rsid: "rs1056836", reason: "CYP1B1 L432V 杂合。" }] : [],
-    crossSystemLinks: [
-      { systemId: "detox", mechanism: "雌激素 II 相解毒依赖 GST/SULT 通路。", relation: "synergy" },
-    ],
-    narrative: "建议十字花科蔬菜（DIM/I3C）+ 充足镁/B6/B12 支持甲基化灭活。",
-  };
+  return assemble(
+    "estrogen",
+    "雌激素代谢",
+    cyp1b1 && cyp1b1.effectType !== "wild" ? "medium" : "low",
+    cyp1b1 ? [{ rsid: "rs1056836", reason: "CYP1B1 L432V 杂合。" }] : [],
+    "CYP1B1 杂合，4-OH 通路活性偏高。",
+    "建议十字花科蔬菜（DIM/I3C）+ 充足镁/B6/B12 支持甲基化灭活。",
+  );
 }
 
 function buildDetox(genes: GenotypedGene[]): SystemAssessment {
   const gstp1 = geneByRs(genes, "rs1695");
-  return {
-    systemId: "detox",
-    title: "氧化与解毒",
-    riskLevel: gstp1 && gstp1.effectType !== "wild" ? "medium" : "low",
-    oneLineSummary: "GSTP1 杂合，二相解毒能力中等，建议环境暴露最小化。",
-    drivingVariants: gstp1 ? [{ rsid: "rs1695", reason: "GSTP1 I105V 杂合。" }] : [],
-    crossSystemLinks: [
-      { systemId: "estrogen", mechanism: "4-OH 雌激素通过 GST 灭活。", relation: "synergy" },
-    ],
-    narrative: "建议补充 NAC / 谷胱甘肽前体，避免长期接触染发剂、农药残留。",
-  };
+  return assemble(
+    "detox",
+    "氧化与解毒",
+    gstp1 && gstp1.effectType !== "wild" ? "medium" : "low",
+    gstp1 ? [{ rsid: "rs1695", reason: "GSTP1 I105V 杂合。" }] : [],
+    "GSTP1 杂合，二相解毒能力中等。",
+    "建议补充 NAC / 谷胱甘肽前体。",
+  );
 }
 
 function buildNeurotransmitter(genes: GenotypedGene[]): SystemAssessment {
   const comt = geneByRs(genes, "rs4680");
   const maoa = geneByRs(genes, "rs6323");
-  return {
-    systemId: "neurotransmitter",
-    title: "神经递质",
-    riskLevel: "medium",
-    oneLineSummary: "COMT Val/Val + MAOA 高活性，多巴胺周转快，压力下易疲劳。",
-    drivingVariants: [
+  return assemble(
+    "neurotransmitter",
+    "神经递质",
+    "medium",
+    [
       ...(comt ? [{ rsid: "rs4680", reason: "COMT Val/Val 高速型。" }] : []),
       ...(maoa ? [{ rsid: "rs6323", reason: "MAOA 高活性。" }] : []),
     ],
-    crossSystemLinks: [
-      { systemId: "estrogen", mechanism: "COMT 同时负责儿茶酚胺与儿茶酚雌激素灭活。", relation: "synergy" },
-    ],
-    narrative: "高速型在高强度脑力工作下需注意酪氨酸 / 苯丙氨酸摄入与睡眠质量。",
-  };
+    "COMT Val/Val + MAOA 高活性，多巴胺周转快。",
+    "高速型在高强度脑力工作下需注意酪氨酸 / 苯丙氨酸摄入与睡眠质量。",
+  );
 }
 
 function buildCardio(genes: GenotypedGene[]): SystemAssessment {
   const pgc1a = geneByRs(genes, "rs8192678");
-  return {
-    systemId: "cardio",
-    title: "心血管与代谢",
-    riskLevel: pgc1a?.effectType === "homo" ? "medium" : "low",
-    oneLineSummary: "PPARGC1A Ser/Ser，线粒体生物合成偏低，需以耐力训练弥补。",
-    drivingVariants: pgc1a ? [{ rsid: "rs8192678", reason: "PPARGC1A Ser/Ser。" }] : [],
-    crossSystemLinks: [
-      { systemId: "neuro", mechanism: "胰岛素抵抗 + APOE ε4 放大痴呆风险。", relation: "synergy" },
-    ],
-    narrative: "建议每周 ≥150 min 中等强度有氧 + 抗阻训练，监测胰岛素与空腹血糖。",
-  };
+  return assemble(
+    "cardio",
+    "心血管与代谢",
+    pgc1a?.effectType === "homo" ? "medium" : "low",
+    pgc1a ? [{ rsid: "rs8192678", reason: "PPARGC1A Ser/Ser。" }] : [],
+    "PPARGC1A Ser/Ser，线粒体生物合成偏低。",
+    "建议每周 ≥150 min 中等强度有氧 + 抗阻训练。",
+  );
 }
 
-function buildRecommendations(genes: GenotypedGene[]): Recommendation[] {
+function buildRecommendations(_genes: GenotypedGene[]): Recommendation[] {
+  const gen = getSupplementMatrix().recommendations;
+  if (gen.length) return gen;
+  return buildFallbackRecommendations();
+}
+
+function buildAvoidList(_genes: GenotypedGene[]): Recommendation[] {
+  const gen = getSupplementMatrix().avoid;
+  if (gen.length) return gen;
+  return buildFallbackAvoidList();
+}
+
+function buildFallbackRecommendations(): Recommendation[] {
   const list: Recommendation[] = [];
   list.push({
     id: uid("rec"),
@@ -320,7 +336,7 @@ function buildRecommendations(genes: GenotypedGene[]): Recommendation[] {
   return list;
 }
 
-function buildAvoidList(genes: GenotypedGene[]): Recommendation[] {
+function buildFallbackAvoidList(): Recommendation[] {
   return [
     {
       id: uid("avoid"),
@@ -349,7 +365,57 @@ function buildAvoidList(genes: GenotypedGene[]): Recommendation[] {
   ];
 }
 
+/**
+ * 监测矩阵：优先取 generated（D），再叠加用户体检值与状态判定。
+ * 匹配规则：generated metric 字段名经短化（如 "Hcy"），与体检 metric 直接相等。
+ */
 function buildMonitoring(_genes: GenotypedGene[], labs: LabResult[]): MonitoringMetric[] {
+  const find = (m: string) => labs.filter((l) => l.metric === m);
+  const gen = getMonitoringMatrix();
+  if (gen.length) {
+    return gen.map((m) => {
+      const userValues = find(m.metric);
+      const latest = userValues[0];
+      return {
+        ...m,
+        userValues,
+        status: deriveStatus(m.target, latest?.value),
+      };
+    });
+  }
+  return buildFallbackMonitoring(labs);
+}
+
+/** 从 target 字符串里粗略抽数值范围，给最近值打一个 in_range / borderline / out_of_range。 */
+function deriveStatus(target: string, value?: number): MonitoringMetric["status"] {
+  if (value === undefined || !Number.isFinite(value)) return "unknown";
+  if (!target) return "unknown";
+  // 「< X」单边
+  const lt = target.match(/<\s*([\d.]+)/);
+  if (lt) {
+    const hi = Number(lt[1]);
+    return value < hi ? "in_range" : value < hi * 1.2 ? "borderline" : "out_of_range";
+  }
+  // 「> X」单边
+  const gt = target.match(/>\s*([\d.]+)/);
+  if (gt) {
+    const lo = Number(gt[1]);
+    return value > lo ? "in_range" : value > lo * 0.8 ? "borderline" : "out_of_range";
+  }
+  // 「a-b」双边
+  const range = target.match(/([\d.]+)\s*[-~–]\s*([\d.]+)/);
+  if (range) {
+    const lo = Number(range[1]);
+    const hi = Number(range[2]);
+    if (value >= lo && value <= hi) return "in_range";
+    const margin = (hi - lo) * 0.15;
+    if (value >= lo - margin && value <= hi + margin) return "borderline";
+    return "out_of_range";
+  }
+  return "unknown";
+}
+
+function buildFallbackMonitoring(labs: LabResult[]): MonitoringMetric[] {
   const find = (m: string) => labs.filter((l) => l.metric === m);
   return [
     {
