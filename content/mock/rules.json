@@ -1,0 +1,24 @@
+{
+  "version": "0.1.0",
+  "description": "占位规则文件，buildReport 实际通过静态规则在 lib/report-builder.ts 内推断；可在此扩展为可外部加载的 JSON 规则。",
+  "rules": [
+    {
+      "id": "mthfr_compound",
+      "if": { "rsid": "rs1801133", "effect": ["hetero", "homo"], "and": { "rsid": "rs1801131", "effect": ["homo"] } },
+      "then": {
+        "system": "methylation",
+        "risk": "high",
+        "recommendations": ["5-MTHF", "甲钴胺"]
+      }
+    },
+    {
+      "id": "apoe_e4",
+      "if": { "apoe_contains": "ε4" },
+      "then": {
+        "system": "neuro",
+        "risk": "high",
+        "avoid": ["大剂量 α-生育酚单体"]
+      }
+    }
+  ]
+}

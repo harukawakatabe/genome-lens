@@ -1,0 +1,41 @@
+# dependencies
+node_modules
+.pnp
+.pnp.js
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# next
+.next
+out
+dist
+
+# production
+build
+
+# misc
+.DS_Store
+*.log
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+Thumbs.db
+.DS_Store
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts.bak
+
+# testing
+.coverage
+.nyc_output
