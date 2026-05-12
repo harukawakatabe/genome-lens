@@ -40,3 +40,6 @@ next-env.d.ts.bak
 # testing
 .coverage
 .nyc_output
+
+# generated content
+content/generated/
